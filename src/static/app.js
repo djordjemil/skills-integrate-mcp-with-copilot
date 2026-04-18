@@ -3,6 +3,95 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const authBtn = document.getElementById("auth-btn");
+  const loginModal = document.getElementById("login-modal");
+  const modalClose = document.getElementById("modal-close");
+  const loginForm = document.getElementById("login-form");
+  const loginMessage = document.getElementById("login-message");
+  const signupContainer = document.getElementById("signup-container");
+
+  let isTeacher = false;
+
+  // Check if already logged in
+  async function checkAuth() {
+    try {
+      const response = await fetch("/auth/me");
+      if (response.ok) {
+        const data = await response.json();
+        setLoggedIn(data.username);
+      } else {
+        setLoggedOut();
+      }
+    } catch {
+      setLoggedOut();
+    }
+  }
+
+  function setLoggedIn(username) {
+    isTeacher = true;
+    authBtn.textContent = `👤 ${username} (Logout)`;
+    authBtn.title = "Click to logout";
+    signupContainer.classList.remove("hidden");
+    fetchActivities();
+  }
+
+  function setLoggedOut() {
+    isTeacher = false;
+    authBtn.textContent = "👤 Login";
+    authBtn.title = "Teacher Login";
+    signupContainer.classList.add("hidden");
+    fetchActivities();
+  }
+
+  // Auth button: show login modal or logout
+  authBtn.addEventListener("click", async () => {
+    if (isTeacher) {
+      await fetch("/auth/logout", { method: "POST" });
+      setLoggedOut();
+    } else {
+      loginModal.classList.remove("hidden");
+    }
+  });
+
+  modalClose.addEventListener("click", () => {
+    loginModal.classList.add("hidden");
+    loginMessage.classList.add("hidden");
+  });
+
+  loginModal.addEventListener("click", (e) => {
+    if (e.target === loginModal) {
+      loginModal.classList.add("hidden");
+      loginMessage.classList.add("hidden");
+    }
+  });
+
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+    try {
+      const response = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const result = await response.json();
+      if (response.ok) {
+        loginModal.classList.add("hidden");
+        loginForm.reset();
+        loginMessage.classList.add("hidden");
+        setLoggedIn(result.username);
+      } else {
+        loginMessage.textContent = result.detail || "Login failed";
+        loginMessage.className = "error";
+        loginMessage.classList.remove("hidden");
+      }
+    } catch {
+      loginMessage.textContent = "Login failed. Please try again.";
+      loginMessage.className = "error";
+      loginMessage.classList.remove("hidden");
+    }
+  });
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -10,8 +99,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/activities");
       const activities = await response.json();
 
-      // Clear loading message
+      // Clear loading message and reset select dropdown
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -30,7 +120,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${isTeacher ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button>` : ""}</li>`
                   )
                   .join("")}
               </ul>
@@ -155,6 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Initialize app
-  fetchActivities();
+  // Initialize app — check auth first, which also triggers fetchActivities
+  checkAuth();
 });
